@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    volumes:
+      - ./data:/app/data:ro
+    restart: unless-stopped
+
+  ui:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    environment:
+      - RECOMMENDER_API_URL=http://api:8000
+    command: >
+      sh -c "pip install -q streamlit python-dotenv requests &&
+             streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0"
+    depends_on:
+      - api
+    restart: unless-stopped

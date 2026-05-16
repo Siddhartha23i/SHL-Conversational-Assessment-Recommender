@@ -1,0 +1,162 @@
+[
+  {
+    "id": "C1_senior_leadership",
+    "description": "CXO/Director selection with leadership benchmark",
+    "turns": [
+      "We need a solution for senior leadership.",
+      "The pool consists of CXOs, director-level positions; people with more than 15 years of experience.",
+      "Selection — comparing candidates against a leadership benchmark.",
+      "Perfect, that's what we need."
+    ],
+    "expected_assessments": [
+      "Occupational Personality Questionnaire OPQ32r",
+      "OPQ Universal Competency Report 2.0",
+      "OPQ Leadership Report"
+    ]
+  },
+  {
+    "id": "C2_rust_senior_engineer",
+    "description": "Senior Rust engineer for high-performance networking",
+    "turns": [
+      "I'm hiring a senior Rust engineer for high-performance networking infrastructure. What assessments should I use?",
+      "Yes, go ahead. Should I also add a cognitive test for this level?",
+      "That works. Thanks."
+    ],
+    "expected_assessments": [
+      "Smart Interview Live Coding",
+      "Linux Programming (General)",
+      "Networking and Implementation (New)",
+      "SHL Verify Interactive G+",
+      "Occupational Personality Questionnaire OPQ32r"
+    ]
+  },
+  {
+    "id": "C3_contact_centre_english_us",
+    "description": "500 entry-level contact centre agents, English US",
+    "turns": [
+      "We're screening 500 entry-level contact centre agents. Inbound calls, customer service focus. What should we use?",
+      "English.",
+      "US.",
+      "Perfect — new simulation for volume, old solution for finalists. Confirmed."
+    ],
+    "expected_assessments": [
+      "SVAR Spoken English (US) (New)",
+      "Contact Center Call Simulation (New)",
+      "Entry Level Customer Serv - Retail & Contact Center",
+      "Customer Service Phone Simulation"
+    ]
+  },
+  {
+    "id": "C4_graduate_financial_analysts",
+    "description": "Graduate financial analysts — numerical + finance knowledge + SJT",
+    "turns": [
+      "Hiring graduate financial analysts — final-year students, no work experience. We need numerical reasoning and a finance knowledge test.",
+      "Good. Can you also add a situational judgement element — work-context decision making for graduates?",
+      "That covers it. Numerical + Graduate Scenarios as first filter, domain tests for shortlisted candidates."
+    ],
+    "expected_assessments": [
+      "SHL Verify Interactive – Numerical Reasoning",
+      "Financial Accounting (New)",
+      "Basic Statistics (New)",
+      "Graduate Scenarios",
+      "Occupational Personality Questionnaire OPQ32r"
+    ]
+  },
+  {
+    "id": "C5_sales_reskilling",
+    "description": "Sales organisation reskilling and talent audit",
+    "turns": [
+      "As part of our restructuring and annual talent audit, we need to re-skill our Sales organization. What solutions do you recommend?",
+      "What's the difference between OPQ and OPQ MQ Sales Report?",
+      "Clear. We'll use OPQ for everyone and add MQ only where we want motivators in the Sales Report; keeping the five solutions as our audit stack."
+    ],
+    "expected_assessments": [
+      "Global Skills Assessment",
+      "Global Skills Development Report",
+      "Occupational Personality Questionnaire OPQ32r",
+      "OPQ MQ Sales Report",
+      "Sales Transformation 2.0 - Individual Contributor"
+    ]
+  },
+  {
+    "id": "C6_chemical_plant_safety",
+    "description": "Plant operators at chemical facility — safety critical",
+    "turns": [
+      "We're hiring plant operators for a chemical facility. Safety is absolute top priority — reliability, procedure compliance, never cutting corners. What do you recommend?",
+      "What's the difference between the DSI and the Safety & Dependability 8.0?",
+      "We're industrial. The 8.0 bundle is the right fit. Confirmed."
+    ],
+    "expected_assessments": [
+      "Manufac. & Indust. - Safety & Dependability 8.0",
+      "Workplace Health and Safety (New)"
+    ]
+  },
+  {
+    "id": "C7_bilingual_healthcare_admin",
+    "description": "Bilingual healthcare admin in South Texas, HIPAA compliance",
+    "turns": [
+      "We're hiring bilingual healthcare admin staff in South Texas — they handle patient records and need to be assessed in Spanish. HIPAA compliance is critical. What assessments work?",
+      "They're functionally bilingual — English fluent for written work. Go with the hybrid.",
+      "Are we legally required under HIPAA to test all staff who touch patient records? And does this SHL test satisfy that requirement?",
+      "Understood. Keep the shortlist as-is."
+    ],
+    "expected_assessments": [
+      "HIPAA (Security)",
+      "Medical Terminology (New)",
+      "Microsoft Word 365 - Essentials (New)",
+      "Dependability and Safety Instrument (DSI)",
+      "Occupational Personality Questionnaire OPQ32r"
+    ]
+  },
+  {
+    "id": "C8_admin_assistants_office",
+    "description": "Admin assistants — Excel and Word, quick screen",
+    "turns": [
+      "I need to quickly screen admin assistants for Excel and Word daily.",
+      "In that case, I am OK with adding a simulation - we want to capture the capabilities.",
+      "That's good."
+    ],
+    "expected_assessments": [
+      "Microsoft Excel 365 (New)",
+      "Microsoft Word 365 (New)",
+      "MS Excel (New)",
+      "MS Word (New)",
+      "Occupational Personality Questionnaire OPQ32r"
+    ]
+  },
+  {
+    "id": "C9_senior_fullstack_java",
+    "description": "Senior full-stack engineer, backend-leaning Java/Spring/SQL/AWS/Docker",
+    "turns": [
+      "Here's the JD for an engineer we need to fill. Senior Full-Stack Engineer — 5+ years across Core Java, Spring, REST API design, Angular, SQL/relational databases, AWS deployment, and Docker.",
+      "Backend-leaning. Day-one priorities are Core Java and Spring; SQL is constant. Angular is occasional.",
+      "Senior IC. They lead design on their own services but don't manage other engineers directly.",
+      "Add AWS and Docker. Drop REST — the API design signal will already come through in Spring and the live interview.",
+      "On Java — they'd be working on existing services, not greenfield. Is the Advanced level the right pick?",
+      "Do we really need Verify G+ on top of all the technical tests? Feels redundant.",
+      "Keep Verify G+. Locking it in."
+    ],
+    "expected_assessments": [
+      "Core Java (Advanced Level) (New)",
+      "Spring (New)",
+      "SQL (New)",
+      "Amazon Web Services (AWS) Development (New)",
+      "Docker (New)",
+      "SHL Verify Interactive G+",
+      "Occupational Personality Questionnaire OPQ32r"
+    ]
+  },
+  {
+    "id": "C10_graduate_management_trainees",
+    "description": "Graduate management trainee — cognitive, personality, SJT battery",
+    "turns": [
+      "We run a graduate management trainee scheme. We need a full battery — cognitive, personality, and situational judgement. All recent graduates.",
+      "But can you remove the OPQ32r and replace it with something shorter? Candidates complain it takes too long.",
+      "Drop the OPQ. Final list: Verify G+ and Graduate Scenarios."
+    ],
+    "expected_assessments": [
+      "SHL Verify Interactive G+",
+      "Graduate Scenarios"
+    ]
+  }
+]
