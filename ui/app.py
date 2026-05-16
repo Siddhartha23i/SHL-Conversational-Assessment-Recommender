@@ -569,7 +569,7 @@ st.markdown(
 )
 
 
-@st.cache_resource(show_spinner="Loading recommendation engine...")
+@st.cache_resource(show_spinner=False)
 def get_agent():
     from src.agent import ConversationalAgent
 
@@ -706,6 +706,14 @@ if "error_message" not in st.session_state:
     st.session_state.error_message = ""
 if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = ""
+
+# Warm up the agent at the TOP of the page so the spinner never
+# appears near the chat input bar. The first page load shows the
+# spinner here; subsequent loads skip it (already cached).
+if not API_URL:
+    with st.spinner("Loading recommendation engine..."):
+        get_agent()
+
 
 with st.sidebar:
     st.markdown("## SHL Recommender")

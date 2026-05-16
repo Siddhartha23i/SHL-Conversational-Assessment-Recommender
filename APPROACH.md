@@ -1,85 +1,89 @@
-# Approach Document - SHL Conversational Assessment Recommender
+# Approach Document
+## SHL Conversational Assessment Recommender
 
-**Candidate:** Ambaigari Siddhartha Reddy  
-**Role:** AI Intern, SHL Labs  
-**Submission:** Refined version
+**Siddhartha | May 2026**
 
-## Design Choices
+---
 
-The main problem is intent ambiguity. Hiring managers often describe a role in plain language instead of using catalog vocabulary, so a pure keyword or faceted search experience is not enough. I treated the task as a stateless conversational retrieval problem with a strict response contract:
+### What I Built
 
-1. clarify only when a critical gap remains,
-2. retrieve grounded candidates from the SHL catalog,
-3. let the LLM choose the next action from a constrained set,
-4. return a strict shortlist object that the evaluator can score.
+I built a conversational system where a hiring manager can describe a role in plain English, and the system guides them through a short dialogue to produce a shortlist of up to 10 relevant SHL assessments. The system exposes a `/chat` API endpoint that accepts the full conversation history and returns a structured reply with assessment recommendations.
 
-The system uses three layers:
+---
 
-- `Sentence-BERT` (`all-MiniLM-L6-v2`) to embed the catalog and user intent
-- `FAISS IndexFlatIP` for fast cosine-style retrieval over the local catalog
-- `Groq llama-3.3-70b-versatile` for conversational reasoning, refinement, comparison, and refusal decisions
+### Design Choices
 
-This separation matters. Retrieval keeps the system grounded in real SHL catalog entries, while the LLM handles conversational judgment. The model never gets to invent recommendations outside the retrieved candidate set.
+The core idea was to split the problem into two steps: **find** and **choose**.
 
-## Retrieval Setup
+**Step 1 — Find (Retrieval):** Instead of searching the catalog by keywords, I used a sentence embedding model (`all-MiniLM-L6-v2` from Sentence Transformers) to convert both the user's query and each assessment description into vectors. I then used FAISS, a fast similarity search library, to find the top 24 most semantically similar assessments from the catalog. This works much better than keyword search because phrases like "team lead" and "people manager" are treated as similar even though they share no words.
 
-The raw catalog is first filtered to keep only in-scope individual SHL solutions and exclude packaged Job Solutions. Each remaining assessment is converted into a rich document string containing name, description, test types, job levels, duration, and delivery metadata. That fuller representation improves matching for vague prompts like "graduate analyst" or "plant safety hiring" that may not overlap directly with the assessment title.
+**Step 2 — Choose (LLM reasoning):** Once I have 24 candidate assessments, I pass them along with the conversation history to an LLM — specifically LLaMA 3.3 70B running on Groq. The LLM reads the candidates and the context, then decides which 10 to pick and writes a short explanation. It also decides what to do next: ask a clarifying question, return a shortlist, refine an existing one, or decline if the request is off-topic.
 
-At runtime, the query is built from the accumulated user turns rather than only the most recent sentence. The retriever returns the top 24 candidates, which gives the LLM enough grounded options without making the prompt unnecessarily large.
+I chose this two-step approach because sending all 370 catalog items to the LLM on every turn would be slow and expensive. The retrieval step acts as a smart pre-filter.
 
-## Prompt Design
+---
 
-The LLM does not generate free-form recommendation objects. It receives:
+### Retrieval Setup
 
-- the full stateless conversation history,
-- a compact summary of facts already established,
-- the upcoming assistant turn number,
-- the retrieved candidate list as structured JSON.
+- **Model:** `all-MiniLM-L6-v2` — a small, fast model (22M parameters) that produces 384-dimensional vectors
+- **Index type:** FAISS `IndexFlatIP` — exact inner-product search, which equals cosine similarity when vectors are normalized
+- **Catalog size:** 370 individual SHL assessments (packaged Job Solutions excluded per the spec)
+- **Retrieval count:** Top 24 candidates sent to the LLM, which selects the final 10
 
-It must respond with JSON only:
+The embeddings and FAISS index are built once using `scripts/build_index.py` and saved to disk. On server startup, the API loads them from disk so there is no rebuild overhead at request time.
 
-`{action, reply, selected_names}`
+---
 
-The allowed actions are `clarify`, `recommend`, `refine`, `compare`, `confirm`, and `refuse`. Returned names are validated against the real catalog before the API response is created.
+### Prompt Design
 
-Two evaluator-facing prompt constraints are especially important:
+The LLM receives a system prompt that defines six possible actions it can take:
 
-- do not clarify once the assistant is near the turn cap,
-- prefer a full top-10 shortlist whenever recommending.
+- **clarify** — ask one focused question when critical information is missing
+- **recommend** — return a shortlist when enough context exists
+- **refine** — update the shortlist based on new constraints
+- **compare** — explain differences between assessments without returning a new list
+- **confirm** — finalize when the user agrees with the current shortlist
+- **refuse** — decline off-topic, legal, or prompt-injection attempts
 
-## Agent Behavior
+The LLM always responds in JSON:
+```json
+{ "action": "recommend", "reply": "...", "selected_names": ["Assessment A", ...] }
+```
 
-The agent supports the required behaviors from the PDF:
+This structured output means the backend always knows exactly what to do — it is not parsing free-form text. The selected names are cross-referenced against the real catalog to guarantee catalog-grounded URLs in the response.
 
-- `Clarify`: asks one focused question if the request is still too underspecified
-- `Recommend`: returns a grounded top-10 shortlist
-- `Refine`: updates the shortlist after new constraints
-- `Compare`: answers from catalog data only and suppresses the shortlist for that turn
-- `Refuse`: stays in scope and declines off-topic or prompt-injection requests
+One thing I added was a **hard guard in Python** before the LLM is called: if the user's message is very short and contains no job-related words (e.g., "hi" or "hello"), the system immediately asks for the role without invoking the LLM at all. This prevents unnecessary API calls and stops the LLM from hallucinating a shortlist for vague inputs.
 
-The assignment's biggest implementation detail is the turn limit. The evaluator counts total messages across both user and assistant turns. The agent therefore treats the conversation budget as 8 total messages and forces a shortlist by assistant turn 6 instead of continuing to clarify too long.
+---
 
-## What Changed During Refinement
+### What Didn't Work
 
-Some early choices were weaker than they looked:
+**Google Gemini (initial choice):** I originally used Google's GenAI SDK but kept hitting quota limits (429 errors) during testing. I switched to Groq, which has a generous free tier and is significantly faster (~200 tokens per second).
 
-1. Using the entire scraped catalog without filtering was risky because it included packaged "Solution" entries that are outside the assignment scope.
-2. Treating the turn cap as "8 user turns" was incorrect and could fail hard evaluator checks.
-3. Letting the evaluator continue after a shortlist made the local score less faithful to SHL's replay behavior.
-4. The original UI was visually strong but still carried extra surface noise for a recruiter-facing demo.
+**Multi-line f-strings in Streamlit:** The UI was rendering HTML as raw code because Streamlit's markdown parser treats 4+ leading spaces as a code block. All HTML rendering had to be rewritten using single-line string concatenation.
 
-The refined version fixes those points by:
+**LLM recommending on "hi":** The LLM would sometimes return a shortlist even when the user just greeted it. This was fixed with the Python-level input guard described above.
 
-- filtering the catalog to 370 in-scope entries,
-- rebuilding the cleaned catalog and FAISS index,
-- aligning evaluation and runtime behavior to the 8-message total cap,
-- returning an exact top-10 shortlist when recommendations are shown,
-- simplifying the Streamlit UI into a cleaner presentation layer for demos.
+---
 
-## Evaluation Approach
+### Evaluation Approach
 
-I kept `Recall@10` as the main retrieval metric because it matches the assignment. The local evaluator now more closely mirrors SHL's description: replay the conversation statelessly, stop when the agent returns a shortlist, and respect the total-message cap. I did not rely on happy-path spot checks alone; the design was shaped around likely automated probes such as schema compliance, off-topic refusal, non-hallucination, and over-clarification near the turn limit.
+I wrote a local evaluator (`evaluation/evaluate.py`) that replays conversation traces statelessly and computes **Recall@10** — what fraction of relevant assessments appear in the returned shortlist. The evaluator stops as soon as a shortlist is returned, mirrors the 8-message conversation cap, and sends requests to the live API rather than calling the agent directly.
 
-## Tools Used
+The FAISS step is tuned to retrieve 24 candidates (more than needed) to maximize recall before the LLM does the final selection. This separation keeps the retrieval recall high while letting the LLM handle precision.
 
-AI-assisted coding was used for scaffolding and iteration, but the final design choices were reviewed and refined manually. The main external services and libraries are Groq, Sentence-Transformers, FAISS, FastAPI, and Streamlit.
+---
+
+### AI Tools Used
+
+I used an AI coding assistant (Antigravity / Gemini) extensively for:
+- Generating the base FastAPI and Streamlit scaffolding
+- Drafting and iterating on the system prompt
+- Debugging Streamlit CSS rendering issues
+- Writing this document's initial draft (then edited for clarity and tone)
+
+All architectural decisions, model selections, and the core agent logic were reviewed and refined by me. The AI was used as an accelerator, not a replacement for understanding.
+
+---
+
+*Submitted as part of the SHL AI Internship Assessment — May 2026*
