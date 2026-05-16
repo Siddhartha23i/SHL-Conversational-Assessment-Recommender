@@ -176,6 +176,7 @@ class ConversationalAgent:
         # ── Auto-build FAISS index if missing (binary files are gitignored) ───
         # cleaned_catalog.json is committed to the repo, so it's always present.
         # The FAISS index and embeddings are rebuilt on first cold start only.
+        index_already_built = False
         if not FAISS_INDEX_PATH.exists() or not EMBEDDINGS_PATH.exists():
             logger.info("[agent] FAISS index not found — building from catalog...")
             catalog = load_cleaned_catalog()
@@ -184,11 +185,17 @@ class ConversationalAgent:
             self.embedder.build_index(embeddings)
             self.embedder.save(FAISS_INDEX_PATH, EMBEDDINGS_PATH)
             logger.info("[agent] FAISS index built and saved.")
+            index_already_built = True  # index is already in memory — skip disk reload
 
-        # ── Load from disk ────────────────────────────────────────────────────
+        # ── Load catalog + index ──────────────────────────────────────────────
         self.catalog = load_cleaned_catalog()
         self._catalog_by_name = {item["name"]: item for item in self.catalog}
-        self.embedder.load(FAISS_INDEX_PATH, EMBEDDINGS_PATH)
+
+        # Only load from disk when we didn't just build it in this same call.
+        # If we built it above, self.embedder.index is already populated.
+        if not index_already_built:
+            self.embedder.load(FAISS_INDEX_PATH, EMBEDDINGS_PATH)
+
         self._init_llm()
         self._loaded = True
         logger.info(
