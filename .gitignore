@@ -10,7 +10,6 @@ build/
 .DS_Store
 data/faiss_index.bin
 data/embeddings.npy
-data/cleaned_catalog.json
 *.npy
 
 # Assignment internals — not for public repo

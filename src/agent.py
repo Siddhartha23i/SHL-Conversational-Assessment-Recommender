@@ -7,7 +7,6 @@ import time
 from typing import Optional
 
 from src.config import (
-    CLEANED_CATALOG_PATH,
     FAISS_TOP_K,
     FINAL_TOP_K,
     GROQ_API_KEY,
@@ -172,26 +171,13 @@ class ConversationalAgent:
 
     def load(self) -> None:
         from src.config import EMBEDDINGS_PATH, FAISS_INDEX_PATH
-        from src.data_loader import (
-            load_cleaned_catalog,
-            load_raw_catalog,
-            preprocess_catalog,
-            save_cleaned_catalog,
-        )
+        from src.data_loader import load_cleaned_catalog
 
-        # ── Auto-bootstrap: build missing artifacts on first run ──────────────
-        # This handles fresh deployments (e.g. Streamlit Cloud) where the
-        # data/ directory exists in .gitignore and files must be built at runtime.
-
-        if not CLEANED_CATALOG_PATH.exists():
-            logger.info("[agent] cleaned_catalog.json not found — building from raw catalog...")
-            raw = load_raw_catalog()
-            cleaned = preprocess_catalog(raw)
-            save_cleaned_catalog(cleaned)
-            logger.info("[agent] Preprocessing complete: %d assessments", len(cleaned))
-
+        # ── Auto-build FAISS index if missing (binary files are gitignored) ───
+        # cleaned_catalog.json is committed to the repo, so it's always present.
+        # The FAISS index and embeddings are rebuilt on first cold start only.
         if not FAISS_INDEX_PATH.exists() or not EMBEDDINGS_PATH.exists():
-            logger.info("[agent] FAISS index not found — building embeddings and index...")
+            logger.info("[agent] FAISS index not found — building from catalog...")
             catalog = load_cleaned_catalog()
             documents = [item["document"] for item in catalog]
             embeddings = self.embedder.encode(documents)
