@@ -1,173 +1,211 @@
 # SHL Conversational Assessment Recommender
 
-Conversational SHL assessment recommender built for the SHL AI Intern take-home assignment.
+A conversational AI system that guides hiring teams to the right SHL assessments through natural multi-turn dialogue. Built on a RAG pipeline combining Sentence-BERT semantic retrieval with LLM-powered shortlist reasoning.
 
-It exposes the required stateless FastAPI interface, uses Sentence-BERT plus FAISS for grounded retrieval, and uses Groq for shortlist reasoning. The catalog is filtered to in-scope individual SHL solutions and excludes packaged Job Solutions.
-
-## What It Does
-
-- Accepts full conversation history on every `POST /chat` call
-- Clarifies vague requests before recommending
-- Returns a grounded shortlist with catalog URLs only
-- Supports refinement, comparison, and refusal behavior
-- Aligns with the evaluator's 8-message total cap across user and assistant turns
-- Produces an exact final top-10 shortlist when recommendations are returned
+---
 
 ## Architecture
 
 ```mermaid
 graph TD
-    U[User message history] --> API[FastAPI /chat]
-    API --> AG[ConversationalAgent]
-    AG --> RET[Sentence-BERT + FAISS retrieval]
-    RET --> LLM[Groq LLM decision layer]
-    LLM --> OUT[reply + recommendations + end_of_conversation]
+    U["💬 Conversation History (POST /chat)"] --> API["FastAPI Backend"]
+    API --> AG["ConversationalAgent"]
+    AG --> GUARD["Input Validator\n(vague input guard)"]
+    GUARD --> RET["Sentence-BERT Encoder\n+ FAISS IndexFlatIP\n(top-24 candidates)"]
+    RET --> CTX["Context Extractor\n(role · seniority · constraints)"]
+    CTX --> LLM["Groq · LLaMA 3.3 70B\nAction: clarify / recommend / refine / compare / confirm / refuse"]
+    LLM --> BUILD["Recommendation Builder\n(catalog cross-reference · top-10)"]
+    BUILD --> OUT["ChatResponse\nreply + recommendations[] + end_of_conversation"]
+    LLM -- "LLM unavailable" --> FB["FAISS Heuristic Fallback\n(top-10 by cosine score)"]
+    FB --> OUT
 ```
 
-Runtime flow:
+**Runtime flow:**
+1. Validate input — greetings and off-topic messages are intercepted before the LLM is invoked
+2. Embed the accumulated user query using Sentence-BERT and search the FAISS index for the top-24 catalog candidates
+3. Extract established context (role, seniority, constraints) from conversation history
+4. Send the candidates + context to LLaMA 3.3 70B (Groq) and receive a structured JSON action
+5. Cross-reference selected assessment names against the catalog and build the API response
+6. On LLM failure — fall back to FAISS cosine-score ordering (system never returns 5xx)
 
-1. Build a retrieval query from the accumulated user turns.
-2. Retrieve the top 24 grounded candidates from the SHL catalog with FAISS.
-3. Ask the LLM to choose the next action: clarify, recommend, refine, compare, confirm, or refuse.
-4. Convert the selected names back into strict API response objects.
-5. Fall back to FAISS-only heuristics if the LLM is unavailable.
+---
 
-## API Contract
+## Key Design Decisions
+
+| Component | Choice | Rationale |
+|---|---|---|
+| **Retrieval** | FAISS `IndexFlatIP` | Exact nearest-neighbor search; <1 ms at 370 vectors; no infrastructure overhead |
+| **Embedding** | `all-MiniLM-L6-v2` | Best speed/accuracy ratio for semantic similarity; L2-normalized → inner product = cosine |
+| **LLM** | LLaMA 3.3 70B via Groq | ~200 tok/s; GPT-4o-level instruction following; `json_object` response mode for guaranteed valid JSON |
+| **API** | FastAPI (stateless) | Full conversation history sent on every call; horizontally scalable; Pydantic enforces the exact evaluator schema |
+| **Fallback** | FAISS heuristic | If Groq is rate-limited or unavailable, top-10 by cosine score are returned — zero downtime |
+| **UI** | Streamlit | Rapid Python-native interface; `@st.cache_resource` loads the agent once across all sessions |
+
+---
+
+## API Reference
 
 ### `GET /health`
 
 ```json
-{"status": "ok"}
+{ "status": "ok" }
 ```
 
 ### `POST /chat`
 
-Request:
+**Request** — full conversation history, stateless:
 
 ```json
 {
   "messages": [
-    {"role": "user", "content": "I am hiring a Java developer"},
-    {"role": "assistant", "content": "What seniority level?"},
-    {"role": "user", "content": "Mid-level, around 4 years"}
+    { "role": "user",      "content": "I am hiring a senior Java developer with AWS experience." },
+    { "role": "assistant", "content": "What seniority level and team size are you targeting?" },
+    { "role": "user",      "content": "Mid-senior, around 4–6 years." }
   ]
 }
 ```
 
-Response:
+**Response:**
 
 ```json
 {
-  "reply": "Here are 10 assessments that fit the brief.",
+  "reply": "Based on your requirements, here are 10 SHL assessments that fit the brief.",
   "recommendations": [
-    {"name": "Java 8 (New)", "url": "https://www.shl.com/...", "test_type": "K"},
-    {"name": "Occupational Personality Questionnaire OPQ32r", "url": "https://www.shl.com/...", "test_type": "P"}
+    { "name": "Java 8 (New)",                              "url": "https://www.shl.com/...", "test_type": "K" },
+    { "name": "Occupational Personality Questionnaire OPQ32r", "url": "https://www.shl.com/...", "test_type": "P" }
   ],
   "end_of_conversation": false
 }
 ```
 
-Notes:
+**Assessment type codes:**
 
-- `recommendations` is empty while the agent is clarifying, comparing, or refusing.
-- Any returned shortlist is capped at 10 items.
-- `end_of_conversation` becomes `true` on explicit confirmation or when the final turn budget is reached.
+| Code | Category |
+|---|---|
+| K | Knowledge & Skills |
+| P | Personality & Behavior |
+| A | Ability & Aptitude |
+| C | Competencies |
+| S | Simulations |
+| E | Assessment Exercises |
+| D | Development & 360° |
+| B | Biodata & Situational Judgment |
+
+**Behavior:**
+- `recommendations` is empty while the agent is clarifying, comparing, or refusing
+- Returned shortlists are always capped at 10 items with catalog-verified URLs
+- `end_of_conversation` is `true` when the user confirms the final shortlist
+
+---
 
 ## Project Structure
 
-```text
-SHL_Assignment/
-|-- api/
-|   `-- main.py
-|-- data/
-|   |-- cleaned_catalog.json
-|   |-- embeddings.npy
-|   `-- faiss_index.bin
-|-- evaluation/
-|   |-- evaluate.py
-|   `-- test_conversations.json
-|-- scripts/
-|   |-- build_index.py
-|   `-- preprocess.py
-|-- src/
-|   |-- agent.py
-|   |-- config.py
-|   |-- data_loader.py
-|   |-- embedder.py
-|   |-- models.py
-|   `-- recommender.py
-|-- ui/
-|   `-- app.py
-|-- Dockerfile
-|-- docker-compose.yml
-|-- requirements.txt
-`-- shl_product_catalog.json
 ```
+SHL_Assignment/
+├── api/
+│   └── main.py              # FastAPI app — /health and /chat endpoints
+├── src/
+│   ├── agent.py             # ConversationalAgent — RAG pipeline + action routing
+│   ├── config.py            # Environment variables, model/retrieval constants
+│   ├── data_loader.py       # Catalog ingestion and cleaning
+│   ├── embedder.py          # Sentence-BERT encoding + FAISS index management
+│   ├── models.py            # Pydantic schemas (ChatRequest, ChatResponse, RecommendationItem)
+│   └── recommender.py       # Standalone retrieval utility
+├── ui/
+│   └── app.py               # Streamlit conversational interface
+├── data/
+│   ├── cleaned_catalog.json # Preprocessed SHL catalog
+│   ├── embeddings.npy       # Pre-computed assessment embeddings
+│   └── faiss_index.bin      # Serialized FAISS index
+├── scripts/
+│   ├── preprocess.py        # Catalog cleaning script
+│   └── build_index.py       # Embedding + FAISS index builder
+├── evaluation/
+│   ├── evaluate.py          # Recall@10 / MAP evaluator
+│   └── test_conversations.json
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
+```
+
+---
 
 ## Local Setup
 
+**1. Install dependencies**
+
 ```bash
 pip install -r requirements.txt
+```
+
+**2. Configure environment**
+
+```bash
 copy .env.example .env
 ```
 
-Add your Groq key:
+Add your Groq API key to `.env`:
 
 ```env
 GROQ_API_KEY=your_key_here
 ```
 
-Build the local artifacts:
+**3. Build the FAISS index**
 
 ```bash
 python scripts/preprocess.py
 python scripts/build_index.py
 ```
 
-Run the API:
+**4. Start the API server**
 
 ```bash
 python -m uvicorn api.main:app --reload --port 8000
 ```
 
-Run the Streamlit demo:
+**5. Launch the Streamlit interface**
 
 ```bash
 streamlit run ui/app.py
 ```
 
+The Streamlit UI can connect to the local FastAPI server or run standalone using the built-in agent directly.
+
+---
+
 ## Evaluation
 
-The repo includes 10 public conversation traces and a local `Recall@10` evaluator:
+The repo includes 10 conversation traces and a local evaluator that mirrors the assignment protocol:
 
 ```bash
 python evaluation/evaluate.py
 ```
 
-The local evaluator now mirrors the assignment more closely:
+Metrics computed:
+- **Recall@10** — fraction of relevant assessments captured in the shortlist
+- **MAP** — mean average precision, accounting for ranking quality
 
-- stateless replay
-- stop once a shortlist is returned
-- respect the 8-message total conversation cap
+The evaluator replays conversations statelessly, stops once a shortlist is returned, and respects the 8-message conversation cap.
 
-## Deployment
-
-Recommended split:
-
-- Deploy `FastAPI` for the assignment endpoint
-- Deploy `Streamlit` as the demo UI only
-
-Why:
-
-- SHL's automated scorer hits the API, not the Streamlit frontend
-- Streamlit is excellent for recruiter demos and manual review
-- Keeping the API separate is cleaner and more production-like
+---
 
 ## Docker
 
-The repo includes:
+A `Dockerfile` and `docker-compose.yml` are included for containerized deployment.
 
-- `Dockerfile` for the FastAPI service
-- `docker-compose.yml` for local multi-service setup
+```bash
+docker compose up --build
+```
 
-Docker is not mandatory for the assignment score, but it is a useful plus for portability and recruiter review.
+The FastAPI service runs on port `8000`. The FAISS index is built at container startup if the `data/` artifacts are not already present.
+
+---
+
+## Tech Stack
+
+- **[FastAPI](https://fastapi.tiangolo.com/)** — async REST API with automatic schema validation
+- **[Sentence-Transformers](https://www.sbert.net/)** — `all-MiniLM-L6-v2` for semantic embeddings
+- **[FAISS](https://github.com/facebookresearch/faiss)** — Facebook AI Similarity Search for vector retrieval
+- **[Groq](https://groq.com/)** — high-throughput inference for LLaMA 3.3 70B
+- **[Streamlit](https://streamlit.io/)** — conversational web interface
+- **[Pydantic v2](https://docs.pydantic.dev/)** — strict request/response schema enforcement
