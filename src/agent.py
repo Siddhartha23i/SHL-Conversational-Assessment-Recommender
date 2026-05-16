@@ -7,6 +7,7 @@ import time
 from typing import Optional
 
 from src.config import (
+    CLEANED_CATALOG_PATH,
     FAISS_TOP_K,
     FINAL_TOP_K,
     GROQ_API_KEY,
@@ -171,8 +172,34 @@ class ConversationalAgent:
 
     def load(self) -> None:
         from src.config import EMBEDDINGS_PATH, FAISS_INDEX_PATH
-        from src.data_loader import load_cleaned_catalog
+        from src.data_loader import (
+            load_cleaned_catalog,
+            load_raw_catalog,
+            preprocess_catalog,
+            save_cleaned_catalog,
+        )
 
+        # ── Auto-bootstrap: build missing artifacts on first run ──────────────
+        # This handles fresh deployments (e.g. Streamlit Cloud) where the
+        # data/ directory exists in .gitignore and files must be built at runtime.
+
+        if not CLEANED_CATALOG_PATH.exists():
+            logger.info("[agent] cleaned_catalog.json not found — building from raw catalog...")
+            raw = load_raw_catalog()
+            cleaned = preprocess_catalog(raw)
+            save_cleaned_catalog(cleaned)
+            logger.info("[agent] Preprocessing complete: %d assessments", len(cleaned))
+
+        if not FAISS_INDEX_PATH.exists() or not EMBEDDINGS_PATH.exists():
+            logger.info("[agent] FAISS index not found — building embeddings and index...")
+            catalog = load_cleaned_catalog()
+            documents = [item["document"] for item in catalog]
+            embeddings = self.embedder.encode(documents)
+            self.embedder.build_index(embeddings)
+            self.embedder.save(FAISS_INDEX_PATH, EMBEDDINGS_PATH)
+            logger.info("[agent] FAISS index built and saved.")
+
+        # ── Load from disk ────────────────────────────────────────────────────
         self.catalog = load_cleaned_catalog()
         self._catalog_by_name = {item["name"]: item for item in self.catalog}
         self.embedder.load(FAISS_INDEX_PATH, EMBEDDINGS_PATH)
@@ -183,6 +210,7 @@ class ConversationalAgent:
             len(self.catalog),
             self._model or "FAISS fallback",
         )
+
 
     def _init_llm(self) -> None:
         if not GROQ_API_KEY:
