@@ -17,7 +17,20 @@ EMBEDDINGS_PATH = DATA_DIR / "embeddings.npy"
 
 # ── Environment ───────────────────────────────────────────────────────────────
 load_dotenv(ROOT_DIR / ".env")
-GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+
+def _get_groq_key() -> str:
+    """Read GROQ_API_KEY from env, .env file, or Streamlit secrets (Cloud deployment)."""
+    key = os.getenv("GROQ_API_KEY", "")
+    if not key:
+        try:
+            import streamlit as st
+            key = st.secrets.get("GROQ_API_KEY", "")
+        except Exception:
+            pass
+    return key
+
+GROQ_API_KEY: str = _get_groq_key()
+
 
 # ── Model settings ────────────────────────────────────────────────────────────
 EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"

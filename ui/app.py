@@ -717,7 +717,7 @@ if not API_URL:
 
 with st.sidebar:
     st.markdown("## SHL Recommender")
-    st.caption("A recruiter-friendly demo surface for the FastAPI recommender.")
+    st.caption("Conversational assessment selection powered by semantic search + LLM reasoning.")
 
     if st.button("Start New Conversation", use_container_width=True):
         reset_conversation()
